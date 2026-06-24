@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: roomsplit
+      POSTGRES_PASSWORD: roomsplit
+      POSTGRES_DB: roomsplit
+    ports:
+      - "5432:5432"
+    volumes:
+      - roomsplit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roomsplit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        DATABASE_URL: postgresql://roomsplit:roomsplit@db:5432/roomsplit
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://roomsplit:roomsplit@db:5432/roomsplit
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  roomsplit_pgdata:

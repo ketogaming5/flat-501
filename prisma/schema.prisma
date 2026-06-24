@@ -1,0 +1,134 @@
+// flat-101_Maani — Prisma 7 schema
+// Prisma 7 removed `url` from datasource — connection config lives in prisma.config.ts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DISABLED
+  USER_ENABLED
+  PASSWORD_RESET
+  ADJUSTMENT_CREATED
+  ADJUSTMENT_UPDATED
+  ADJUSTMENT_DELETED
+  EXPENSE_CREATED
+  SETTLEMENT_CREATED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  role         Role     @default(USER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  expensesPaid         Expense[]            @relation("PaidBy")
+  expenseParticipants  ExpenseParticipant[]
+  settlementsPaid      Settlement[]         @relation("SettlementPayer")
+  settlementsReceived  Settlement[]         @relation("SettlementReceiver")
+  adjustments          Adjustment[]         @relation("AdjustmentUser")
+  adjustmentsCreated   Adjustment[]         @relation("AdjustmentCreatedBy")
+  sessions             Session[]
+  auditLogsAsActor     AuditLog[]           @relation("AuditActor")
+  auditLogsAsTarget    AuditLog[]           @relation("AuditTarget")
+
+  @@index([isActive])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  title       String
+  amount      Decimal  @db.Decimal(12, 2)
+  paidById    String
+  paidBy      User     @relation("PaidBy", fields: [paidById], references: [id])
+  date        DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  participants ExpenseParticipant[]
+
+  @@index([paidById])
+  @@index([date])
+}
+
+model ExpenseParticipant {
+  id        String   @id @default(cuid())
+  expenseId String
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  share     Decimal  @db.Decimal(12, 2)
+
+  @@unique([expenseId, userId])
+  @@index([userId])
+}
+
+model Settlement {
+  id         String   @id @default(cuid())
+  payerId    String
+  payer      User     @relation("SettlementPayer", fields: [payerId], references: [id])
+  receiverId String
+  receiver   User     @relation("SettlementReceiver", fields: [receiverId], references: [id])
+  amount     Decimal  @db.Decimal(12, 2)
+  date       DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([payerId])
+  @@index([receiverId])
+  @@index([date])
+}
+
+model Adjustment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("AdjustmentUser", fields: [userId], references: [id])
+  amount      Decimal  @db.Decimal(12, 2)
+  reason      String
+  createdById String
+  createdBy   User     @relation("AdjustmentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  action    AuditAction
+  actorId   String
+  actor     User        @relation("AuditActor", fields: [actorId], references: [id])
+  targetId  String?
+  target    User?       @relation("AuditTarget", fields: [targetId], references: [id])
+  details   String?
+  timestamp DateTime    @default(now())
+
+  @@index([actorId])
+  @@index([timestamp])
+}
